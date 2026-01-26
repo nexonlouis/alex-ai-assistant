@@ -1,0 +1,71 @@
+[project]
+name = "alex-ai-assistant"
+version = "0.1.0"
+description = "Autonomous, self-reflective AI assistant with temporal knowledge graph memory"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Alex AI", email = "alex@system.local"}
+]
+keywords = ["ai", "assistant", "neo4j", "langraph", "gemini", "knowledge-graph"]
+
+dependencies = [
+    # Core Framework
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+
+    # LLM & Orchestration
+    "langgraph>=0.2.0",
+    "langchain>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "google-generativeai>=0.8.0",
+
+    # Neo4j
+    "neo4j>=5.15.0",
+    "langchain-neo4j>=0.1.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+    "tenacity>=8.2.0",
+    "structlog>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+alex = "alex.main:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["alex"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,49 @@
+# Alex AI Assistant - Docker Ignore
+# Files to exclude from Docker build context
+
+# Git
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.env
+.venv/
+env/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Documentation
+*.md
+docs/
+
+# Local development
+*.log
+.DS_Store
+Thumbs.db
+
+# GCP config
+cloudbuild.yaml
+.gcloudignore
+
+# Scripts (not needed in container)
+scripts/
+
+# Session state
+SESSION_STATE.md

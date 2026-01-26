@@ -1,0 +1,7 @@
+sources:
+  my-neo4j-source:
+    kind: "neo4j"
+    uri: "neo4j+s://d1f2297e.databases.neo4j.io"
+    user: "neo4j"
+    password: "wyk_1AdWGPpeQXlU9pahkfK6qA9zdOSop-BtrlySG14"
+    database: "neo4j"
