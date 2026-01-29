@@ -68,3 +68,6 @@ tools.yaml.secure
 
 # Large binary files
 toolbox
+
+# Claude local settings (may contain secrets)
+.claude/settings.local.json

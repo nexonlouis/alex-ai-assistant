@@ -596,6 +596,193 @@ class GraphStore:
 
             return record["month_id"] if record else month_id
 
+    async def store_code_change(
+        self,
+        change_id: str,
+        user_id: str,
+        files_modified: list[str],
+        description: str,
+        reasoning: str,
+        change_type: str,
+        commit_sha: str | None = None,
+        related_interaction_id: str | None = None,
+    ) -> str:
+        """
+        Store a code change in the knowledge graph.
+
+        This tracks Alex's self-modifications for memory and recall.
+
+        Args:
+            change_id: Unique identifier for the change
+            user_id: User who requested the change
+            files_modified: List of file paths that were modified
+            description: What was changed
+            reasoning: Why the change was made
+            change_type: Type of change (feature, bugfix, refactor, etc.)
+            commit_sha: Git commit SHA if committed
+            related_interaction_id: ID of the interaction that triggered this
+
+        Returns:
+            The change ID
+        """
+        today = date.today().isoformat()
+
+        query = """
+        // Ensure time tree exists
+        MERGE (d:Day {date: $date})
+
+        // Create code change node
+        CREATE (cc:CodeChange {
+            id: $change_id,
+            timestamp: datetime(),
+            files_modified: $files_modified,
+            description: $description,
+            reasoning: $reasoning,
+            change_type: $change_type,
+            commit_sha: $commit_sha,
+            file_count: size($files_modified)
+        })
+
+        // Link to day
+        MERGE (cc)-[:OCCURRED_ON]->(d)
+
+        // Link to user
+        MERGE (u:User {id: $user_id})
+        MERGE (u)-[:MADE_CHANGE]->(cc)
+
+        RETURN cc.id AS change_id
+        """
+
+        async with self.session() as session:
+            result = await session.run(
+                query,
+                change_id=change_id,
+                date=today,
+                files_modified=files_modified,
+                description=description,
+                reasoning=reasoning,
+                change_type=change_type,
+                commit_sha=commit_sha,
+            )
+            record = await result.single()
+
+            # Link to triggering interaction if provided
+            if related_interaction_id:
+                await session.run("""
+                    MATCH (cc:CodeChange {id: $change_id})
+                    MATCH (i:Interaction {id: $interaction_id})
+                    MERGE (cc)-[:TRIGGERED_BY]->(i)
+                """, change_id=change_id, interaction_id=related_interaction_id)
+
+            # Extract and link concepts from files modified
+            concepts = self._extract_concepts_from_files(files_modified)
+            if concepts:
+                await self._link_change_to_concepts(session, change_id, concepts)
+
+            logger.info(
+                "Code change stored",
+                change_id=change_id,
+                files=files_modified,
+                change_type=change_type,
+            )
+
+            return record["change_id"] if record else change_id
+
+    def _extract_concepts_from_files(self, files: list[str]) -> list[str]:
+        """Extract concept names from file paths."""
+        concepts = set()
+        for f in files:
+            # Extract module names
+            parts = f.replace("/", ".").replace(".py", "").split(".")
+            for part in parts:
+                if part and part not in ("alex", "tests", "__init__"):
+                    concepts.add(part)
+        return list(concepts)
+
+    async def _link_change_to_concepts(
+        self,
+        session,
+        change_id: str,
+        concepts: list[str],
+    ):
+        """Link a code change to concept nodes."""
+        query = """
+        MATCH (cc:CodeChange {id: $change_id})
+        UNWIND $concepts AS concept_name
+        MERGE (c:Concept {name: concept_name})
+        ON CREATE SET c.normalized_name = toLower(replace(concept_name, ' ', '_')),
+                      c.first_mentioned = datetime(),
+                      c.mention_count = 0
+        SET c.mention_count = c.mention_count + 1
+        MERGE (cc)-[:MODIFIES_CONCEPT]->(c)
+        """
+        await session.run(query, change_id=change_id, concepts=concepts)
+
+    async def get_recent_code_changes(
+        self,
+        limit: int = 10,
+        change_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get recent code changes.
+
+        Args:
+            limit: Maximum number of changes to return
+            change_type: Optional filter by change type
+
+        Returns:
+            List of code change dictionaries
+        """
+        query = """
+        MATCH (cc:CodeChange)
+        """ + ("WHERE cc.change_type = $change_type" if change_type else "") + """
+        RETURN cc.id AS id,
+               cc.description AS description,
+               cc.reasoning AS reasoning,
+               cc.files_modified AS files_modified,
+               cc.change_type AS change_type,
+               cc.commit_sha AS commit_sha,
+               toString(cc.timestamp) AS timestamp
+        ORDER BY cc.timestamp DESC
+        LIMIT $limit
+        """
+
+        async with self.session() as session:
+            result = await session.run(
+                query,
+                limit=limit,
+                change_type=change_type,
+            )
+            records = await result.data()
+            return records
+
+    async def get_code_changes_for_file(self, file_path: str) -> list[dict[str, Any]]:
+        """
+        Get all code changes that modified a specific file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            List of code change dictionaries
+        """
+        query = """
+        MATCH (cc:CodeChange)
+        WHERE $file_path IN cc.files_modified
+        RETURN cc.id AS id,
+               cc.description AS description,
+               cc.reasoning AS reasoning,
+               cc.change_type AS change_type,
+               cc.commit_sha AS commit_sha,
+               toString(cc.timestamp) AS timestamp
+        ORDER BY cc.timestamp DESC
+        """
+
+        async with self.session() as session:
+            result = await session.run(query, file_path=file_path)
+            records = await result.data()
+            return records
+
     async def health_check(self) -> dict[str, Any]:
         """
         Perform a health check on the Neo4j connection.

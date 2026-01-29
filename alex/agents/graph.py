@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from alex.agents.nodes.memory import retrieve_memory, store_interaction
 from alex.agents.nodes.chat import respond_flash, respond_pro
 from alex.agents.nodes.engineer import respond_engineer
+from alex.agents.nodes.self_modify import respond_self_modify
 from alex.agents.edges import route_after_classify, route_after_memory, should_store
 
 logger = structlog.get_logger()
@@ -52,6 +53,8 @@ def create_alex_graph() -> StateGraph:
       │
       ├──[engineering]──► respond_engineer (Claude) ──► store ──► END
       │
+      ├──[self_modify]──► respond_self_modify ──► store ──► END
+      │
       └──[simple]───────► respond_flash ───► store_interaction ──► END
     ```
 
@@ -59,6 +62,7 @@ def create_alex_graph() -> StateGraph:
     - Flash (Gemini 3 Flash): Simple queries, routine tasks
     - Pro (Gemini 3 Pro): Complex analysis, architecture, planning
     - Claude Code (Claude Sonnet): Engineering tasks (code, refactor, debug, test)
+    - Self-Modify (Gemini + Tools): Reading/modifying Alex's own codebase
     """
     # Create the graph builder
     builder = StateGraph(AlexState)
@@ -69,6 +73,7 @@ def create_alex_graph() -> StateGraph:
     builder.add_node("respond_flash", respond_flash)
     builder.add_node("respond_pro", respond_pro)
     builder.add_node("respond_engineer", respond_engineer)
+    builder.add_node("respond_self_modify", respond_self_modify)
     builder.add_node("store_interaction", store_interaction)
     builder.add_node("handle_error", handle_error)
 
@@ -84,6 +89,7 @@ def create_alex_graph() -> StateGraph:
             "respond_flash": "respond_flash",
             "respond_pro": "respond_pro",
             "engineer": "respond_engineer",  # Route to Claude Code
+            "self_modify": "respond_self_modify",  # Route to self-modification
             "error": "handle_error",
         },
     )
@@ -120,6 +126,15 @@ def create_alex_graph() -> StateGraph:
 
     builder.add_conditional_edges(
         "respond_engineer",
+        should_store,
+        {
+            "store": "store_interaction",
+            "complete": END,
+        },
+    )
+
+    builder.add_conditional_edges(
+        "respond_self_modify",
         should_store,
         {
             "store": "store_interaction",

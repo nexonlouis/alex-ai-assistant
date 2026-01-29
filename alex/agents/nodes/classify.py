@@ -22,13 +22,18 @@ User message: {message}
 
 Respond with a JSON object containing:
 {{
-    "intent": "<one of: chat, question, code_change, refactor, debug, test, memory_query, task_planning, creative>",
+    "intent": "<one of: chat, question, code_change, refactor, debug, test, memory_query, task_planning, creative, self_modify>",
     "complexity_score": <float between 0.0 and 1.0, where 1.0 is highly complex>,
     "topics": [<list of main topics/concepts mentioned>],
     "entities": [<list of named entities like people, projects, files>],
     "requires_memory": <boolean, true if the query references past conversations or needs context>,
     "is_ambiguous": <boolean, true if the request is vague or needs clarification>
 }}
+
+Intent guidelines:
+- self_modify: User asks Alex to modify its own code, add features to itself, change its behavior, read its own files, or improve its own capabilities. Keywords: "add a feature", "modify yourself", "update your code", "change your behavior", "read your code", "your codebase", "improve yourself"
+- code_change: User asks about external code, not Alex's own codebase
+- Other intents: Standard chat, questions, debugging, etc.
 
 Guidelines for complexity_score:
 - 0.0-0.3: Simple greetings, factual questions, straightforward requests

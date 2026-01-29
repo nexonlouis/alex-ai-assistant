@@ -16,18 +16,24 @@ logger = structlog.get_logger()
 
 def route_after_classify(
     state: AlexState,
-) -> Literal["retrieve_memory", "respond_flash", "respond_pro", "engineer", "error"]:
+) -> Literal["retrieve_memory", "respond_flash", "respond_pro", "engineer", "self_modify", "error"]:
     """
     Route after intent classification.
 
     Determines the next node based on:
     - Whether memory retrieval is needed
     - The complexity of the request
-    - The type of task (chat vs engineering)
+    - The type of task (chat vs engineering vs self-modification)
     """
     # Check for errors
     if state.get("error") or state.get("processing_stage") == "error":
         return "error"
+
+    # Check for self-modification intent first
+    metadata = state.get("metadata")
+    if metadata and metadata.intent == "self_modify":
+        logger.info("Routing to self-modification node")
+        return "self_modify"
 
     # Determine target cortex
     cortex = route_to_cortex(state)
@@ -38,7 +44,6 @@ def route_after_classify(
         return "engineer"
 
     # Memory-intensive queries should retrieve context first
-    metadata = state.get("metadata")
     memory_intents = {"memory_query", "question", "task_planning"}
     if metadata and metadata.intent in memory_intents:
         logger.info("Routing to memory retrieval")
