@@ -27,7 +27,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     port: int = 8080
 
-    # Neo4j Configuration
+    # PostgreSQL Configuration (primary database)
+    postgres_uri: str = Field(default="postgresql://localhost:5432/alex")
+    postgres_pool_min: int = Field(default=2)
+    postgres_pool_max: int = Field(default=10)
+
+    # Neo4j Configuration (deprecated - kept for migration)
     neo4j_uri: str = Field(default="bolt://localhost:7687")
     neo4j_username: str = Field(default="neo4j")
     neo4j_password: SecretStr = Field(default=SecretStr("password"))

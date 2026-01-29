@@ -7,6 +7,7 @@ Implements hierarchical summarization:
 - Monthly: Summarize weekly summaries into monthly insights
 
 This enables efficient context retrieval at different temporal scales.
+Uses PostgreSQL with pgvector for storage.
 """
 
 from datetime import date, timedelta
@@ -17,7 +18,7 @@ from google import genai
 
 from alex.config import settings
 from alex.cortex.flash import get_client, generate_embedding
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 
 logger = structlog.get_logger()
 
@@ -132,10 +133,10 @@ async def summarize_day(date_str: str) -> dict[str, Any]:
     Returns:
         Summary result with content, topics, and metadata
     """
-    graph_store = GraphStore()
+    store = PostgresStore()
 
     # Get interactions for the day
-    interactions = await graph_store.get_interactions_for_date(date_str)
+    interactions = await store.get_interactions_for_date(date_str)
 
     if not interactions:
         logger.info("No interactions to summarize", date=date_str)
@@ -180,7 +181,7 @@ async def summarize_day(date_str: str) -> dict[str, Any]:
         embedding = None
 
     # Store the summary
-    await graph_store.create_daily_summary(
+    await store.create_daily_summary(
         date_str=date_str,
         content=summary_content,
         key_topics=key_topics,
@@ -215,10 +216,10 @@ async def summarize_week(week_id: str) -> dict[str, Any]:
     Returns:
         Summary result with content, themes, and metadata
     """
-    graph_store = GraphStore()
+    store = PostgresStore()
 
     # Get daily summaries for the week
-    daily_summaries = await graph_store.get_daily_summaries_for_week(week_id)
+    daily_summaries = await store.get_daily_summaries_for_week(week_id)
 
     if not daily_summaries:
         logger.info("No daily summaries to aggregate", week_id=week_id)
@@ -268,7 +269,7 @@ async def summarize_week(week_id: str) -> dict[str, Any]:
         embedding = None
 
     # Store the summary
-    await graph_store.create_weekly_summary(
+    await store.create_weekly_summary(
         week_id=week_id,
         content=summary_content,
         key_themes=key_themes,
@@ -306,10 +307,10 @@ async def summarize_month(month_id: str) -> dict[str, Any]:
     Returns:
         Summary result with content, themes, and metadata
     """
-    graph_store = GraphStore()
+    store = PostgresStore()
 
     # Get weekly summaries for the month
-    weekly_summaries = await graph_store.get_weekly_summaries_for_month(month_id)
+    weekly_summaries = await store.get_weekly_summaries_for_month(month_id)
 
     if not weekly_summaries:
         logger.info("No weekly summaries to aggregate", month_id=month_id)
@@ -370,7 +371,7 @@ async def summarize_month(month_id: str) -> dict[str, Any]:
         embedding = None
 
     # Store the summary
-    await graph_store.create_monthly_summary(
+    await store.create_monthly_summary(
         month_id=month_id,
         content=summary_content,
         key_themes=key_themes,
@@ -409,11 +410,11 @@ async def run_daily_summarization(max_days: int = 7) -> dict[str, Any]:
     Returns:
         Result summary
     """
-    graph_store = GraphStore()
+    store = PostgresStore()
     results = {"processed": 0, "completed": 0, "skipped": 0, "errors": []}
 
     # Get days that need summarization
-    unsummarized_days = await graph_store.get_unsummarized_days(limit=max_days)
+    unsummarized_days = await store.get_unsummarized_days(limit=max_days)
 
     logger.info("Starting daily summarization", days_to_process=len(unsummarized_days))
 
@@ -442,11 +443,11 @@ async def run_weekly_summarization(max_weeks: int = 4) -> dict[str, Any]:
     Returns:
         Result summary
     """
-    graph_store = GraphStore()
+    store = PostgresStore()
     results = {"processed": 0, "completed": 0, "skipped": 0, "errors": []}
 
     # Get weeks that need summarization
-    unsummarized_weeks = await graph_store.get_unsummarized_weeks(limit=max_weeks)
+    unsummarized_weeks = await store.get_unsummarized_weeks(limit=max_weeks)
 
     logger.info("Starting weekly summarization", weeks_to_process=len(unsummarized_weeks))
 
@@ -475,11 +476,11 @@ async def run_monthly_summarization(max_months: int = 2) -> dict[str, Any]:
     Returns:
         Result summary
     """
-    graph_store = GraphStore()
+    store = PostgresStore()
     results = {"processed": 0, "completed": 0, "skipped": 0, "errors": []}
 
     # Get months that need summarization
-    unsummarized_months = await graph_store.get_unsummarized_months(limit=max_months)
+    unsummarized_months = await store.get_unsummarized_months(limit=max_months)
 
     logger.info("Starting monthly summarization", months_to_process=len(unsummarized_months))
 

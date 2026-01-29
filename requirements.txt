@@ -14,7 +14,10 @@ langchain-google-genai>=2.0.0
 google-genai>=1.0.0  # New Gemini SDK (replaces google-generativeai)
 anthropic>=0.40.0  # Claude API for engineering tasks
 
-# Neo4j
+# PostgreSQL with pgvector
+asyncpg>=0.29.0
+
+# Neo4j (deprecated - kept for migration)
 neo4j>=5.15.0
 langchain-neo4j>=0.1.0
 

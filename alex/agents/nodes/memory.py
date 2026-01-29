@@ -1,7 +1,7 @@
 """
 Memory nodes for Alex AI Assistant.
 
-Handles retrieval from and storage to the Neo4j knowledge graph.
+Handles retrieval from and storage to the PostgreSQL database with pgvector.
 """
 
 from datetime import date
@@ -11,7 +11,7 @@ from uuid import uuid4
 import structlog
 
 from alex.agents.state import AlexState, MemoryContext, get_last_user_message, get_last_assistant_message
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 from alex.memory.retriever import HybridRetriever
 from alex.cortex.flash import generate_embedding
 
@@ -97,11 +97,11 @@ async def retrieve_memory(state: AlexState) -> dict[str, Any]:
 
 async def store_interaction(state: AlexState) -> dict[str, Any]:
     """
-    Store the completed interaction in the knowledge graph.
+    Store the completed interaction in the PostgreSQL database.
 
     Creates:
-    - Interaction node with user message and assistant response
-    - Links to the current Day node
+    - Interaction record with user message and assistant response
+    - Links to the current day in the time tree
     - Links to extracted concepts and topics
     """
     metadata = state.get("metadata")
@@ -112,7 +112,7 @@ async def store_interaction(state: AlexState) -> dict[str, Any]:
     )
 
     try:
-        graph_store = GraphStore()
+        store = PostgresStore()
 
         user_message = get_last_user_message(state)
         assistant_message = get_last_assistant_message(state)
@@ -131,7 +131,7 @@ async def store_interaction(state: AlexState) -> dict[str, Any]:
             embedding = None
 
         # Store the interaction
-        interaction_id = await graph_store.store_interaction(
+        interaction_id = await store.store_interaction(
             interaction_id=metadata.interaction_id if metadata else None,
             user_id=state.get("user_id"),
             user_message=user_message,

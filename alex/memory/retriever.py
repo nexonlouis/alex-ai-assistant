@@ -2,6 +2,7 @@
 Hybrid Retriever for Alex AI Assistant.
 
 Implements combined vector + graph retrieval for optimal context gathering.
+Uses PostgreSQL with pgvector for semantic search.
 """
 
 from datetime import date, timedelta
@@ -10,7 +11,7 @@ from typing import Any
 import structlog
 
 from alex.config import settings
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 from alex.cortex.flash import generate_embedding
 
 logger = structlog.get_logger()
@@ -18,17 +19,17 @@ logger = structlog.get_logger()
 
 class HybridRetriever:
     """
-    Hybrid retrieval combining semantic search and graph traversal.
+    Hybrid retrieval combining semantic search and temporal queries.
 
     Retrieval strategies:
     1. Temporal: Get context based on time (today, this week, etc.)
-    2. Semantic: Vector similarity search on embeddings
-    3. Graph: Traverse relationships to find connected context
+    2. Semantic: Vector similarity search using pgvector
+    3. Concept: Find related concepts that co-occur in interactions
     4. Hybrid: Combine all strategies for best results
     """
 
     def __init__(self):
-        self.graph_store = GraphStore()
+        self.store = PostgresStore()
 
     async def get_daily_context(self, date_str: str) -> dict[str, Any]:
         """
@@ -41,17 +42,17 @@ class HybridRetriever:
             Dictionary with daily context
         """
         # Get daily summary
-        daily_summary = await self.graph_store.get_daily_summary(date_str)
+        daily_summary = await self.store.get_daily_summary(date_str)
 
         # Get recent interactions if no summary exists
         interactions = []
         if not daily_summary:
-            interactions = await self.graph_store.get_interactions_for_date(date_str)
+            interactions = await self.store.get_interactions_for_date(date_str)
 
         # Get this week's summary
         d = date.fromisoformat(date_str)
         week_id = f"{d.year}-W{d.isocalendar()[1]:02d}"
-        weekly_summary = await self.graph_store.get_weekly_summary(week_id)
+        weekly_summary = await self.store.get_weekly_summary(week_id)
 
         return {
             "daily_summary": daily_summary.get("content") if daily_summary else None,
@@ -68,50 +69,34 @@ class HybridRetriever:
         min_score: float = 0.7,
     ) -> list[dict[str, Any]]:
         """
-        Perform semantic search using vector similarity.
+        Perform semantic search using pgvector similarity.
 
         Args:
             query: Search query
             top_k: Number of results to return
-            min_score: Minimum similarity score threshold
+            min_score: Minimum similarity score threshold (0-1, cosine similarity)
 
         Returns:
-            List of matching interactions
+            List of matching interactions with similarity scores
         """
         try:
             # Generate embedding for query
             query_embedding = await generate_embedding(query)
 
-            # Search in Neo4j vector index
-            search_query = """
-            CALL db.index.vector.queryNodes('vector_index_interaction', $top_k, $embedding)
-            YIELD node AS interaction, score
-            WHERE score >= $min_score
-            MATCH (interaction)-[:OCCURRED_ON]->(d:Day)
-            RETURN interaction.id AS id,
-                   interaction.user_message AS user_message,
-                   interaction.assistant_response AS assistant_response,
-                   d.date AS date,
-                   score
-            ORDER BY score DESC
-            """
+            # Search using pgvector
+            records = await self.store.semantic_search(
+                embedding=query_embedding,
+                top_k=top_k,
+                min_score=min_score,
+            )
 
-            async with self.graph_store.session() as session:
-                result = await session.run(
-                    search_query,
-                    embedding=query_embedding,
-                    top_k=top_k,
-                    min_score=min_score,
-                )
-                records = await result.data()
+            logger.info(
+                "Semantic search completed",
+                query_length=len(query),
+                results_count=len(records),
+            )
 
-                logger.info(
-                    "Semantic search completed",
-                    query_length=len(query),
-                    results_count=len(records),
-                )
-
-                return records
+            return records
 
         except Exception as e:
             logger.error("Semantic search failed", error=str(e))
@@ -121,6 +106,8 @@ class HybridRetriever:
         """
         Get concepts related to the given topics.
 
+        In PostgreSQL, we find concepts that co-occur in the same interactions.
+
         Args:
             topics: List of topic names
 
@@ -128,10 +115,11 @@ class HybridRetriever:
             List of related concept names
         """
         try:
-            results = await self.graph_store.get_related_concepts(topics)
+            results = await self.store.get_related_concepts(topics)
             related = set()
             for r in results:
-                related.update(r.get("related_concepts", []))
+                related_concepts = r.get("related_concepts") or []
+                related.update(related_concepts)
             return list(related)[:10]  # Limit to 10
 
         except Exception as e:
@@ -149,18 +137,23 @@ class HybridRetriever:
             List of related project names
         """
         try:
-            query = """
-            UNWIND $entities AS entity_name
-            MATCH (p:Project)
-            WHERE p.name CONTAINS entity_name OR p.description CONTAINS entity_name
-            RETURN DISTINCT p.name AS name
-            LIMIT 5
-            """
-
-            async with self.graph_store.session() as session:
-                result = await session.run(query, entities=entities)
-                records = await result.data()
-                return [r["name"] for r in records]
+            async with self.store.connection() as conn:
+                # Use ILIKE for case-insensitive partial matching
+                # and trigram similarity for fuzzy matching
+                rows = await conn.fetch(
+                    """
+                    SELECT DISTINCT p.name
+                    FROM projects p
+                    WHERE EXISTS (
+                        SELECT 1 FROM unnest($1::text[]) AS entity
+                        WHERE p.name ILIKE '%' || entity || '%'
+                           OR p.description ILIKE '%' || entity || '%'
+                    )
+                    LIMIT 5
+                    """,
+                    entities,
+                )
+                return [r["name"] for r in rows]
 
         except Exception as e:
             logger.error("Related projects lookup failed", error=str(e))
@@ -191,22 +184,32 @@ class HybridRetriever:
         # Determine appropriate level
         if days_ago <= 1:
             level = "interactions"
-            content = await self.graph_store.get_interactions_for_date(
+            content = await self.store.get_interactions_for_date(
                 target_date.isoformat()
             )
         elif days_ago <= 7:
             level = "daily"
-            content = await self.graph_store.get_daily_summary(
+            content = await self.store.get_daily_summary(
                 target_date.isoformat()
             )
         elif days_ago <= 30:
             level = "weekly"
             week_id = f"{target_date.year}-W{target_date.isocalendar()[1]:02d}"
-            content = await self.graph_store.get_weekly_summary(week_id)
+            content = await self.store.get_weekly_summary(week_id)
         else:
             level = "monthly"
-            # TODO: Implement monthly summary retrieval
-            content = None
+            # Get monthly summary
+            month_id = f"{target_date.year}-{target_date.month}"
+            async with self.store.connection() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT content, key_themes, generated_at
+                    FROM monthly_summaries
+                    WHERE month_id = $1
+                    """,
+                    month_id,
+                )
+                content = dict(row) if row else None
 
         return {
             "level": level,

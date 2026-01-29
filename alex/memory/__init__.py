@@ -1,10 +1,11 @@
 """
 Memory module for Alex AI Assistant.
 
-Implements the Temporal Knowledge Graph memory system using Neo4j.
+Implements the memory system using PostgreSQL with pgvector.
+Provides semantic search, temporal summaries, and concept tracking.
 """
 
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 from alex.memory.retriever import HybridRetriever
 from alex.memory.summarizer import (
     summarize_day,
@@ -16,8 +17,12 @@ from alex.memory.summarizer import (
     run_full_summarization_pipeline,
 )
 
+# Backward compatibility alias
+GraphStore = PostgresStore
+
 __all__ = [
-    "GraphStore",
+    "PostgresStore",
+    "GraphStore",  # Alias for backward compatibility
     "HybridRetriever",
     "summarize_day",
     "summarize_week",

@@ -8,7 +8,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Alex AI", email = "alex@system.local"}
 ]
-keywords = ["ai", "assistant", "neo4j", "langraph", "gemini", "knowledge-graph"]
+keywords = ["ai", "assistant", "postgresql", "pgvector", "langraph", "gemini", "knowledge-graph"]
 
 dependencies = [
     # Core Framework
@@ -23,7 +23,10 @@ dependencies = [
     "langchain-google-genai>=2.0.0",
     "google-generativeai>=0.8.0",
 
-    # Neo4j
+    # PostgreSQL with pgvector
+    "asyncpg>=0.29.0",
+
+    # Neo4j (deprecated - kept for migration)
     "neo4j>=5.15.0",
     "langchain-neo4j>=0.1.0",
 
