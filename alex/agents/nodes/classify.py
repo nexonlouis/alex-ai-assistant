@@ -31,9 +31,11 @@ Respond with a JSON object containing:
 }}
 
 Intent guidelines:
-- self_modify: User asks Alex to modify its own code, add features to itself, change its behavior, read its own files, or improve its own capabilities. Keywords: "add a feature", "modify yourself", "update your code", "change your behavior", "read your code", "your codebase", "improve yourself"
+- self_modify: User gives a DIRECT COMMAND for Alex to modify its own code, add features to itself, or read its own files. Must be an action request, not a question. Examples: "add a /weather command to yourself", "read your main.py", "update your system prompt", "show me your code for X". NOT for questions like "can you modify yourself?" or "what can you do?"
+- question: User asks ABOUT Alex's capabilities, architecture, or how it works. Examples: "can you modify your code?", "what are your capabilities?", "how do you work?"
 - code_change: User asks about external code, not Alex's own codebase
-- Other intents: Standard chat, questions, debugging, etc.
+- chat: General conversation, greetings, simple questions
+- Other intents: memory_query, task_planning, creative, etc.
 
 Guidelines for complexity_score:
 - 0.0-0.3: Simple greetings, factual questions, straightforward requests
