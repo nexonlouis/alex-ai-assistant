@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 from alex.agents.state import AlexState, get_last_user_message
 from alex.config import settings
 from alex.cortex.flash import get_client
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 from alex.tools.filesystem import (
     TOOL_DEFINITIONS,
     execute_tool,
@@ -204,7 +204,7 @@ async def respond_self_modify(state: AlexState) -> dict[str, Any]:
 
         # Store code changes in memory if files were modified
         if files_modified:
-            graph_store = GraphStore()
+            graph_store = PostgresStore()
             change_id = str(uuid4())
 
             # Extract description from the response or user message
@@ -283,7 +283,7 @@ async def list_recent_changes(state: AlexState) -> dict[str, Any]:
     This allows Alex to recall and report on its own modifications.
     """
     try:
-        graph_store = GraphStore()
+        graph_store = PostgresStore()
         changes = await graph_store.get_recent_code_changes(limit=10)
 
         if not changes:

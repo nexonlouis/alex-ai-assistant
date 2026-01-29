@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from alex.agents.graph import invoke_alex
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 
 router = APIRouter()
 
@@ -73,7 +73,7 @@ async def health_check() -> HealthResponse:
     """
     from alex import __version__
 
-    graph_store = GraphStore()
+    graph_store = PostgresStore()
     neo4j_health = await graph_store.health_check()
 
     return HealthResponse(
@@ -207,7 +207,7 @@ async def get_interactions(date: str | None = None, limit: int = 10) -> dict[str
     """
     from datetime import date as date_type
 
-    graph_store = GraphStore()
+    graph_store = PostgresStore()
     target_date = date or date_type.today().isoformat()
 
     # Get interactions for the date
@@ -295,7 +295,7 @@ async def get_summaries() -> dict[str, Any]:
     """
     Debug endpoint to view all generated summaries.
     """
-    graph_store = GraphStore()
+    graph_store = PostgresStore()
 
     async with graph_store.session() as session:
         # Get daily summaries
@@ -356,7 +356,7 @@ async def get_unsummarized() -> dict[str, Any]:
     """
     Debug endpoint to see what needs to be summarized.
     """
-    graph_store = GraphStore()
+    graph_store = PostgresStore()
 
     unsummarized_days = await graph_store.get_unsummarized_days(limit=30)
     unsummarized_weeks = await graph_store.get_unsummarized_weeks(limit=10)
@@ -381,7 +381,7 @@ async def backfill_embeddings() -> dict[str, Any]:
     """
     from alex.cortex.flash import generate_embedding
 
-    graph_store = GraphStore()
+    graph_store = PostgresStore()
     results = {"processed": 0, "success": 0, "errors": []}
 
     async with graph_store.session() as session:
@@ -419,7 +419,7 @@ async def update_vector_indexes() -> dict[str, Any]:
     """
     Admin endpoint to update vector indexes to 768 dimensions.
     """
-    graph_store = GraphStore()
+    graph_store = PostgresStore()
 
     results = {"dropped": [], "created": [], "errors": []}
 

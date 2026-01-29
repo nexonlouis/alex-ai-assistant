@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from alex import __version__
 from alex.api.routes import router
 from alex.config import settings
-from alex.memory.graph_store import GraphStore
+from alex.memory.postgres_store import PostgresStore
 
 # Configure structured logging
 structlog.configure(
@@ -51,19 +51,23 @@ async def lifespan(app: FastAPI):
         environment=settings.app_env,
     )
 
-    # Initialize Neo4j connection
+    # Initialize PostgreSQL connection pool
     try:
-        await GraphStore.get_driver()
-        logger.info("Neo4j connection established")
+        store = PostgresStore()
+        health = await store.health_check()
+        if health["status"] == "healthy":
+            logger.info("PostgreSQL connection established", **health)
+        else:
+            logger.warning("PostgreSQL connection issues", **health)
     except Exception as e:
-        logger.error("Failed to connect to Neo4j", error=str(e))
+        logger.error("Failed to connect to PostgreSQL", error=str(e))
         # Continue anyway - some endpoints may still work
 
     yield
 
     # Shutdown
     logger.info("Shutting down Alex AI Assistant")
-    await GraphStore.close()
+    await PostgresStore.close()
 
 
 # Create FastAPI application
