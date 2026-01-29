@@ -50,7 +50,7 @@ Your codebase is located at: {project_root}
 Key directories:
 - alex/agents/ - LangGraph nodes and state
 - alex/cortex/ - LLM integrations (Gemini, Claude)
-- alex/memory/ - Neo4j knowledge graph
+- alex/memory/ - PostgreSQL with pgvector for memory storage
 - alex/tools/ - File system tools
 - alex/api/ - FastAPI endpoints
 - tests/ - Test files
@@ -79,7 +79,7 @@ async def respond_self_modify(state: AlexState) -> dict[str, Any]:
     This node:
     1. Understands the modification request
     2. Uses tools to explore and modify the codebase
-    3. Tracks all changes in Neo4j memory
+    3. Tracks all changes in PostgreSQL memory
     4. Optionally commits changes to git
 
     Args:
