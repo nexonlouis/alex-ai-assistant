@@ -24,12 +24,29 @@ Usage:
 import argparse
 import asyncio
 import sys
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import structlog
 from neo4j import AsyncGraphDatabase
+from neo4j.time import DateTime as Neo4jDateTime, Date as Neo4jDate
 import asyncpg
+
+
+def convert_neo4j_datetime(value: Any) -> Any:
+    """Convert Neo4j datetime types to Python datetime/date."""
+    if value is None:
+        return None
+    if isinstance(value, Neo4jDateTime):
+        return datetime(
+            value.year, value.month, value.day,
+            value.hour, value.minute, int(value.second),
+            int((value.second % 1) * 1_000_000),  # microseconds
+            tzinfo=value.tzinfo
+        )
+    if isinstance(value, Neo4jDate):
+        return date(value.year, value.month, value.day)
+    return value
 
 # Configure logging
 structlog.configure(
@@ -138,7 +155,7 @@ class Neo4jToPostgresMigrator:
                     ON CONFLICT (id) DO NOTHING
                     """,
                     user["id"],
-                    user.get("created_at"),
+                    convert_neo4j_datetime(user.get("created_at")),
                 )
                 self.stats["users"] += 1
 
@@ -237,7 +254,7 @@ class Neo4jToPostgresMigrator:
                         i["id"],
                         i.get("user_id"),
                         date_val,
-                        i.get("timestamp"),
+                        convert_neo4j_datetime(i.get("timestamp")),
                         i.get("user_message", ""),
                         i.get("assistant_response", ""),
                         i.get("intent"),
@@ -280,7 +297,7 @@ class Neo4jToPostgresMigrator:
                         """,
                         c["name"],
                         c.get("normalized_name") or c["name"].lower().replace(" ", "_"),
-                        c.get("first_mentioned"),
+                        convert_neo4j_datetime(c.get("first_mentioned")),
                         c.get("mention_count", 0),
                     )
                     self.stats["concepts"] += 1
@@ -394,7 +411,7 @@ class Neo4jToPostgresMigrator:
                         ds.get("interaction_count", 0),
                         ds.get("model_used"),
                         embedding_str,
-                        ds.get("generated_at"),
+                        convert_neo4j_datetime(ds.get("generated_at")),
                     )
                     self.stats["daily_summaries"] += 1
                 except Exception as e:
@@ -457,7 +474,7 @@ class Neo4jToPostgresMigrator:
                         ws.get("total_interactions", 0),
                         ws.get("model_used"),
                         embedding_str,
-                        ws.get("generated_at"),
+                        convert_neo4j_datetime(ws.get("generated_at")),
                     )
                     self.stats["weekly_summaries"] += 1
                 except Exception as e:
@@ -520,7 +537,7 @@ class Neo4jToPostgresMigrator:
                         ms.get("total_interactions", 0),
                         ms.get("model_used"),
                         embedding_str,
-                        ms.get("generated_at"),
+                        convert_neo4j_datetime(ms.get("generated_at")),
                     )
                     self.stats["monthly_summaries"] += 1
                 except Exception as e:
@@ -575,7 +592,7 @@ class Neo4jToPostgresMigrator:
                         cc["id"],
                         cc.get("user_id"),
                         date_val,
-                        cc.get("timestamp"),
+                        convert_neo4j_datetime(cc.get("timestamp")),
                         cc.get("files_modified", []),
                         cc.get("description", ""),
                         cc.get("reasoning"),
