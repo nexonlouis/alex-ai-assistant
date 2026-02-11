@@ -1,6 +1,6 @@
 # Alex AI Assistant - Session State
 
-**Last Updated:** 2026-01-26 18:00 UTC
+**Last Updated:** 2026-02-11 (TastyTrade Integration)
 
 ## Current Status: LIVE IN PRODUCTION 🚀
 
@@ -13,13 +13,13 @@ All core features deployed and verified:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Neo4j Schema | ✅ Deployed | 730 days, 104 weeks, 24 months, 2 years, 10 concepts, 1 user, 1 project |
+| PostgreSQL Schema | ✅ Deployed | Migrated from Neo4j with pgvector extension |
 | Python Project | ✅ Complete | LangGraph + FastAPI architecture |
 | LangGraph State | ✅ Fixed | Changed from Pydantic BaseModel to TypedDict for message compatibility |
 | Intent Classification | ✅ Working | Gemini Flash classifies intents and complexity scores |
 | Gemini Flash (Basal) | ✅ Working | Handles routine queries |
 | API Endpoints | ✅ Working | `/api/v1/chat`, `/api/v1/health`, debug and admin endpoints |
-| Neo4j Connection | ✅ Healthy | Connected to AuraDB |
+| PostgreSQL Connection | ✅ Healthy | Connected to database with pgvector |
 | Web UI | ✅ Working | Simple chat interface at `web/index.html` |
 
 ### Verified Components
@@ -27,13 +27,13 @@ All core features deployed and verified:
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Memory Persistence | ✅ Verified | Interactions stored with Day/User/Concept linking |
-| Day Node Linking | ✅ Verified | OCCURRED_ON relationships working |
-| User Linking | ✅ Verified | HAD_INTERACTION relationships working |
-| Concept Extraction | ✅ Verified | Topics extracted and linked via MENTIONS_CONCEPT |
+| Day Linking | ✅ Verified | Temporal relationships working |
+| User Linking | ✅ Verified | User interaction relationships working |
+| Concept Extraction | ✅ Verified | Topics extracted and linked |
 | Gemini Pro (Executive) | ✅ Verified | Routes correctly when complexity >= 0.7 |
 | SDK Migration | ✅ Complete | Migrated from google-generativeai to google-genai |
-| Semantic Search | ✅ Verified | Vector search working with 768-dim embeddings |
-| Hybrid Retrieval | ✅ Verified | Temporal + semantic + graph retrieval working |
+| Semantic Search | ✅ Verified | Vector search working with 768-dim embeddings (pgvector) |
+| Hybrid Retrieval | ✅ Verified | Temporal + semantic retrieval working |
 | Embedding Generation | ✅ Verified | text-embedding-004 (768 dims) on store |
 
 ### Claude Code Integration
@@ -57,13 +57,38 @@ All core features deployed and verified:
 | API Endpoints | ✅ Complete | `/tasks/summarize_daily`, `/tasks/summarize_weekly`, `/tasks/summarize_monthly`, `/tasks/summarize_all` |
 | Debug Endpoints | ✅ Complete | `/debug/summaries`, `/debug/unsummarized` |
 
+### TastyTrade Brokerage Integration
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| TastyTrade Client | ✅ Complete | `alex/brokerage/tastytrade_client.py` - Direct HTTP API with session caching |
+| Trading Tools | ✅ Complete | `alex/brokerage/tastytrade_tools.py` - Gemini function calling tools |
+| Trade Intent Routing | ✅ Complete | `trade` intent classification and graph routing |
+| Trade Node | ✅ Complete | `alex/agents/nodes/trade.py` - Safety-focused trading responses |
+| Audit Logging | ✅ Complete | `trades` table in PostgreSQL for all executed trades |
+| Unit Tests | ✅ Complete | 18 tests with mocked HTTP responses |
+
+**Safety Mechanisms:**
+- Sandbox mode by default (paper trading)
+- Mandatory two-step confirmation flow (dry-run → confirm)
+- 5-minute trade expiration window
+- Full audit trail in PostgreSQL
+
+**Available Tools:**
+- `get_positions()` - List current positions with P&L
+- `get_account_balances()` - Cash, buying power, net liquidating value
+- `place_order_dry_run()` - Validate order, get trade_id for confirmation
+- `close_position_dry_run()` - Validate position close, get trade_id
+- `confirm_trade(trade_id)` - Execute validated trade
+- `cancel_pending_trade(trade_id)` - Cancel without executing
+
 ### Production Deployment
 
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Cloud Run Service | ✅ Live | `alex-api` in `us-central1` |
 | Service URL | ✅ Active | https://alex-api-102313356909.us-central1.run.app |
-| Secret Manager | ✅ Configured | All 5 secrets stored and accessible |
+| Secret Manager | ✅ Configured | All secrets stored and accessible |
 | Artifact Registry | ✅ Created | `alex-repo` for container images |
 | Cloud Scheduler | ✅ Active | 3 jobs for automated summarization |
 
@@ -79,7 +104,7 @@ All core features deployed and verified:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| MCP Toolbox | ⏳ Pending | tools.yaml.secure configured but not integrated |
+| Repository Mapper | ⏳ Pending | Self-knowledge AST analysis |
 
 ## Key Files Modified
 
@@ -107,11 +132,24 @@ assistant_msg = get_last_assistant_message(state)
 
 ### Required Environment Variables (.env)
 ```
-NEO4J_URI=neo4j+s://d1f2297e.databases.neo4j.io
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=wyk_1AdWGPpeQXlU9pahkfK6qA9zdOSop-BtrlySG14
-NEO4J_DATABASE=neo4j
+POSTGRES_URI=postgresql://localhost:5432/alex
 GOOGLE_API_KEY=<your-api-key>
+```
+
+### Optional Environment Variables
+```
+ANTHROPIC_API_KEY=<your-api-key>  # For Claude Code integration
+APP_ENV=development
+LOG_LEVEL=INFO
+
+# TastyTrade (Sandbox - Paper Trading)
+TASTY_SANDBOX_USERNAME=<your-sandbox-username>
+TASTY_SANDBOX_PASSWORD=<your-sandbox-password>
+
+# TastyTrade (Production - Real Money)
+TASTY_USERNAME=<your-username>
+TASTY_PASSWORD=<your-password>
+TASTY_USE_SANDBOX=true  # Set to false for production trading
 ```
 
 ### GCP APIs Enabled
@@ -142,6 +180,15 @@ curl http://localhost:8080/api/v1/debug/interactions          # Check stored int
 curl http://localhost:8080/api/v1/debug/semantic-search?query=microservices  # Test semantic search
 curl http://localhost:8080/api/v1/memory/today                # Get today's context
 
+# Trading endpoints (requires TastyTrade credentials in .env)
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "Show me my positions"}'
+
+curl -X POST http://localhost:8080/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "What is my account balance?"}'
+
 # Admin endpoints
 curl -X POST http://localhost:8080/api/v1/admin/backfill-embeddings    # Backfill missing embeddings
 curl -X POST http://localhost:8080/api/v1/admin/update-vector-indexes  # Update vector indexes
@@ -157,17 +204,17 @@ User Request
 │ classify_intent │  ← Gemini Flash analyzes intent & complexity
 └────────┬────────┘
          │
-    ┌────┴────┬──────────┬─────────┐
-    ▼         ▼          ▼         ▼
- [simple]  [memory]  [complex]  [engineering]
-    │         │          │         │
-    ▼         ▼          ▼         ▼
-  Flash   retrieve    Pro      Claude Code
-           memory      │         (pending)
-             │         │
-             └────┬────┘
+    ┌────┴────┬──────────┬─────────┬─────────┐
+    ▼         ▼          ▼         ▼         ▼
+ [simple]  [memory]  [complex]  [engineer]  [trade]
+    │         │          │         │         │
+    ▼         ▼          ▼         ▼         ▼
+  Flash   retrieve    Pro      Claude     TastyTrade
+           memory      │        Code       Tools
+             │         │         │         │
+             └────┬────┴─────────┴─────────┘
                   ▼
-         store_interaction → Neo4j
+         store_interaction → PostgreSQL
                   │
                   ▼
                  END
@@ -176,9 +223,9 @@ User Request
 ## Next Steps (In Order)
 
 1. ~~**Memory Persistence Testing**~~ ✅ COMPLETE
-   - ✅ Interactions stored in Neo4j with embeddings
-   - ✅ Interaction nodes created with correct properties
-   - ✅ Links to Day nodes and Concepts working
+   - ✅ Interactions stored in PostgreSQL with embeddings
+   - ✅ Interaction rows created with correct properties
+   - ✅ Links to Day and Concepts working
 
 2. ~~**Gemini Pro Routing**~~ ✅ COMPLETE
    - ✅ High-complexity queries (>= 0.7) route to Pro
@@ -187,7 +234,7 @@ User Request
 
 3. ~~**Memory Retrieval Testing**~~ ✅ COMPLETE
    - ✅ Semantic search returns relevant past interactions
-   - ✅ Vector indexes updated to 768 dimensions (text-embedding-004)
+   - ✅ Vector indexes using pgvector (768 dimensions for text-embedding-004)
    - ✅ Hybrid retrieval (temporal + semantic) working
    - ✅ Alex recalls previous conversations accurately
 
@@ -212,11 +259,15 @@ User Request
    - ✅ .gcloudignore and .dockerignore for optimized builds
    - Run `./scripts/setup_gcp.sh` to deploy
 
-7. **Optional Enhancements**
+7. ~~**Database Migration**~~ ✅ COMPLETE
+   - ✅ Migrated from Neo4j to PostgreSQL with pgvector
+   - ✅ All data and relationships preserved
+   - ✅ Vector search working with cosine similarity
+
+8. **Optional Enhancements**
    - ✅ Cloud Scheduler for automated summarization (COMPLETE)
    - Custom domain mapping
    - Cloud Monitoring alerts
-   - MCP Toolbox integration
 
 ## Troubleshooting
 
@@ -229,17 +280,20 @@ lsof -ti:8080 | xargs kill -9
 python3 -c "import langgraph; import langchain; print('OK')"
 ```
 
-### Neo4j connection fails
+### PostgreSQL connection fails
 ```bash
 # Test connection directly
 python3 -c "
-from neo4j import GraphDatabase
-driver = GraphDatabase.driver(
-    'neo4j+s://d1f2297e.databases.neo4j.io',
-    auth=('neo4j', 'wyk_1AdWGPpeQXlU9pahkfK6qA9zdOSop-BtrlySG14')
-)
-with driver.session() as s:
-    print(s.run('RETURN 1').single()[0])
+import asyncpg
+import asyncio
+
+async def test():
+    conn = await asyncpg.connect('postgresql://localhost:5432/alex')
+    result = await conn.fetchval('SELECT 1')
+    print(f'Connected: {result}')
+    await conn.close()
+
+asyncio.run(test())
 "
 ```
 
@@ -262,13 +316,13 @@ embedding_model = "text-embedding-004"
 embedding_dimensions = 768  # text-embedding-004 outputs 768 dims
 ```
 
-### Neo4j Vector Indexes
-All vector indexes configured for 768 dimensions (matching text-embedding-004):
-- `vector_index_interaction` - Interaction embeddings
-- `vector_index_concept` - Concept embeddings
-- `vector_index_project` - Project embeddings
-- `vector_index_daily_summary` - Daily summary embeddings
-- `vector_index_weekly_summary` - Weekly summary embeddings
+### PostgreSQL Vector Indexes (pgvector)
+All vector columns configured for 768 dimensions (matching text-embedding-004):
+- `interactions.embedding` - Interaction embeddings
+- `concepts.embedding` - Concept embeddings
+- `projects.embedding` - Project embeddings
+- `daily_summaries.embedding` - Daily summary embeddings
+- `weekly_summaries.embedding` - Weekly summary embeddings
 
 ### Model Routing
 - complexity_score < 0.7 → Gemini Flash (fast, routine queries)
@@ -301,6 +355,37 @@ When `ANTHROPIC_API_KEY` is not configured:
 2. Engineer node detects missing API key
 3. Falls back to Gemini Pro with engineering-specific prompts
 4. Response indicates "gemini-3-pro-preview (fallback)" in metadata
+
+### TastyTrade Brokerage Configuration
+```python
+# .env configuration
+TASTY_SANDBOX_USERNAME=your-sandbox-email
+TASTY_SANDBOX_PASSWORD=your-sandbox-password
+TASTY_USE_SANDBOX=true  # Default: paper trading mode
+
+# For production (real money) - use with caution!
+TASTY_USERNAME=your-email
+TASTY_PASSWORD=your-password
+TASTY_USE_SANDBOX=false
+
+# Files:
+# alex/brokerage/tastytrade_client.py - Session management
+# alex/brokerage/tastytrade_tools.py - Trading tools
+# alex/agents/nodes/trade.py - Trade response node
+# schema/migrations/003_add_trades_table.sql - Audit table
+
+# Trade confirmation flow:
+# 1. User: "Buy 100 shares of AAPL"
+# 2. Alex calls place_order_dry_run() → returns trade_id
+# 3. Alex presents: "Ready to BUY 100 AAPL @ market. Confirm?"
+# 4. User: "Yes, confirm"
+# 5. Alex calls confirm_trade(trade_id) → executes order
+# 6. Trade logged to PostgreSQL trades table
+
+# Session caching:
+# Sessions cached at ~/.alex/tastytrade/session.json
+# Automatically reused if valid, re-authenticated if expired
+```
 
 ### Recursive Summarization
 ```python
@@ -347,17 +432,15 @@ GET /api/v1/debug/unsummarized       # See what needs summarization
 | Secret | Status |
 |--------|--------|
 | `GOOGLE_API_KEY` | ✅ Active |
-| `NEO4J_URI` | ✅ Active |
-| `NEO4J_USERNAME` | ✅ Active |
-| `NEO4J_PASSWORD` | ✅ Active |
+| `POSTGRES_URI` | ✅ Active |
 | `ANTHROPIC_API_KEY` | ✅ Active |
 
 ### Cloud Scheduler Jobs (Automated Summarization)
 | Job | Schedule | Next Run |
 |-----|----------|----------|
-| `alex-daily-summary` | 2:00 AM UTC daily | 2026-01-27 02:00 UTC |
-| `alex-weekly-summary` | 3:00 AM UTC Mondays | 2026-02-02 03:00 UTC |
-| `alex-monthly-summary` | 4:00 AM UTC on 1st | 2026-02-01 04:00 UTC |
+| `alex-daily-summary` | 2:00 AM UTC daily | Check scheduler |
+| `alex-weekly-summary` | 3:00 AM UTC Mondays | Check scheduler |
+| `alex-monthly-summary` | 4:00 AM UTC on 1st | Check scheduler |
 
 ### Quick Commands
 
@@ -392,9 +475,15 @@ gcloud run deploy alex-api \
   --region us-central1 \
   --allow-unauthenticated \
   --memory 1Gi \
-  --set-secrets="GOOGLE_API_KEY=GOOGLE_API_KEY:latest,NEO4J_URI=NEO4J_URI:latest,NEO4J_USERNAME=NEO4J_USERNAME:latest,NEO4J_PASSWORD=NEO4J_PASSWORD:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest" \
-  --set-env-vars="APP_ENV=production,LOG_LEVEL=INFO,NEO4J_DATABASE=neo4j"
+  --set-secrets="GOOGLE_API_KEY=GOOGLE_API_KEY:latest,POSTGRES_URI=POSTGRES_URI:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest" \
+  --set-env-vars="APP_ENV=production,LOG_LEVEL=INFO"
 
 # Option 2: Use Cloud Build (CI/CD)
 gcloud builds submit --config cloudbuild.yaml
 ```
+
+## Migration History
+
+- **2026-01-25**: Initial implementation with Neo4j AuraDB
+- **2026-02-11**: Migrated from Neo4j to PostgreSQL with pgvector
+- **2026-02-11**: Added TastyTrade brokerage integration with trade confirmation flow
