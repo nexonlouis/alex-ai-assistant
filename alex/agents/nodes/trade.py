@@ -54,7 +54,7 @@ TRADE_SYSTEM_PROMPT = """You are Alex, an AI assistant with trading capabilities
 ## Confirmation Flow
 1. User requests a trade
 2. Call dry-run tool to validate → get trade_id
-3. Present trade details: "Ready to {action} {quantity} {symbol} at {price}. This is {mode} mode. Confirm?"
+3. Present trade details: "Ready to [action] [quantity] [symbol] at [price]. This is [mode] mode. Confirm?"
 4. WAIT for user to say "yes", "confirm", "execute", etc.
 5. Only then call confirm_trade(trade_id)
 
@@ -172,12 +172,22 @@ async def respond_trade(state: AlexState) -> dict[str, Any]:
                         if hasattr(part, "function_call") and part.function_call:
                             func_call = part.function_call
                             func_name = func_call.name
-                            func_args = dict(func_call.args) if func_call.args else {}
+                            # Handle different arg formats from Gemini SDK
+                            if func_call.args:
+                                try:
+                                    # Try direct dict conversion
+                                    func_args = dict(func_call.args)
+                                except (TypeError, ValueError):
+                                    # Fallback: iterate over items if it's a protobuf map
+                                    func_args = {k: v for k, v in func_call.args.items()}
+                            else:
+                                func_args = {}
 
                             logger.info(
                                 "Executing trade tool",
                                 tool=func_name,
                                 args=func_args,
+                                args_type=type(func_call.args).__name__ if func_call.args else "None",
                             )
 
                             # Execute the tool
