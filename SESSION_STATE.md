@@ -1,6 +1,6 @@
 # Alex AI Assistant - Session State
 
-**Last Updated:** 2026-02-11 (TastyTrade Integration)
+**Last Updated:** 2026-02-11 (Database Sync)
 
 ## Current Status: LIVE IN PRODUCTION 🚀
 
@@ -82,6 +82,41 @@ All core features deployed and verified:
 - `confirm_trade(trade_id)` - Execute validated trade
 - `cancel_pending_trade(trade_id)` - Cancel without executing
 
+### Database Sync (Local → Remote)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Sync Module | ✅ Complete | `alex/sync/db_sync.py` - Incremental sync logic |
+| Setup Script | ✅ Complete | `scripts/setup_sync_schedule.sh` - macOS launchd setup |
+| Schedule | ✅ Active | Daily at 2:00 AM via launchd |
+| State Tracking | ✅ Working | `~/.alex/sync_state.json` tracks last sync |
+| Logs | ✅ Configured | `~/.alex/logs/sync.log` |
+
+**Tables Synced:**
+- `users`, `days`, `interactions`, `concepts`
+- `interaction_concepts`, `code_changes`, `code_change_concepts`
+- `daily_summaries`, `weekly_summaries`, `monthly_summaries`
+- `trades`
+
+**Commands:**
+```bash
+# Run sync manually
+python -m alex.sync.db_sync
+
+# Check sync status
+python -m alex.sync.db_sync --status
+
+# Force full sync (ignore last sync time)
+python -m alex.sync.db_sync --force-full
+
+# View sync logs
+tail -f ~/.alex/logs/sync.log
+
+# Manage schedule
+launchctl unload ~/Library/LaunchAgents/com.alex.dbsync.plist  # Stop
+launchctl load ~/Library/LaunchAgents/com.alex.dbsync.plist    # Start
+```
+
 ### Production Deployment
 
 | Component | Status | Notes |
@@ -132,8 +167,13 @@ assistant_msg = get_last_assistant_message(state)
 
 ### Required Environment Variables (.env)
 ```
+# For local development
 POSTGRES_URI=postgresql://localhost:5432/alex
 GOOGLE_API_KEY=<your-api-key>
+
+# For database sync
+LOCAL_POSTGRES_URI=postgresql://localhost:5432/alex
+REMOTE_POSTGRES_URI=<your-neon-connection-string>
 ```
 
 ### Optional Environment Variables
@@ -487,3 +527,4 @@ gcloud builds submit --config cloudbuild.yaml
 - **2026-01-25**: Initial implementation with Neo4j AuraDB
 - **2026-02-11**: Migrated from Neo4j to PostgreSQL with pgvector
 - **2026-02-11**: Added TastyTrade brokerage integration with trade confirmation flow
+- **2026-02-11**: Added database sync (local → remote Neon) with daily launchd schedule
