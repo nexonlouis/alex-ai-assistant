@@ -900,6 +900,150 @@ class PostgresStore:
 
             return results
 
+    async def store_trade(
+        self,
+        trade_id: str,
+        user_id: str,
+        order_id: str | None = None,
+        description: str = "",
+        symbol: str | None = None,
+        action: str | None = None,
+        quantity: int | None = None,
+        order_type: str = "market",
+        price: float | None = None,
+        instrument_type: str = "equity",
+        option_symbol: str | None = None,
+        account_number: str | None = None,
+        mode: str = "sandbox",
+        status: str | None = None,
+        related_interaction_id: str | None = None,
+    ) -> str:
+        """
+        Store an executed trade for audit logging.
+
+        Args:
+            trade_id: Unique trade identifier
+            user_id: User who executed the trade
+            order_id: Brokerage order ID
+            description: Human-readable trade description
+            symbol: Stock/underlying symbol
+            action: "buy" or "sell"
+            quantity: Number of shares/contracts
+            order_type: "market" or "limit"
+            price: Execution price (for limit orders)
+            instrument_type: "equity" or "option"
+            option_symbol: Full OCC symbol for options
+            account_number: Brokerage account number
+            mode: "sandbox" or "live"
+            status: Order status from brokerage
+            related_interaction_id: ID of conversation that triggered trade
+
+        Returns:
+            The trade ID
+        """
+        today = date.today()
+        today_str = today.isoformat()
+
+        # Parse description if symbol/action/quantity not provided
+        if description and not symbol:
+            # Try to parse from description like "BUY 100 AAPL @ market"
+            parts = description.upper().split()
+            if len(parts) >= 3:
+                if parts[0] in ("BUY", "SELL"):
+                    action = parts[0].lower()
+                    try:
+                        quantity = int(parts[1])
+                        symbol = parts[2]
+                    except (ValueError, IndexError):
+                        pass
+
+        # Ensure time tree and user exist
+        await self.ensure_time_tree(today_str)
+        await self.ensure_user(user_id)
+
+        async with self.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO trades (
+                    id, user_id, date, timestamp, symbol, action, quantity,
+                    order_id, status, order_type, price, instrument_type,
+                    option_symbol, account_number, mode, related_interaction_id
+                )
+                VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                ON CONFLICT (id) DO UPDATE SET
+                    order_id = EXCLUDED.order_id,
+                    status = EXCLUDED.status
+                """,
+                trade_id,
+                user_id,
+                today,
+                symbol,
+                action,
+                quantity,
+                order_id,
+                status,
+                order_type,
+                price,
+                instrument_type,
+                option_symbol,
+                account_number,
+                mode,
+                related_interaction_id,
+            )
+
+        logger.info(
+            "Trade stored for audit",
+            trade_id=trade_id,
+            symbol=symbol,
+            action=action,
+            mode=mode,
+        )
+
+        return trade_id
+
+    async def get_recent_trades(
+        self,
+        user_id: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """
+        Get recent trades for audit review.
+
+        Args:
+            user_id: Optional filter by user
+            limit: Maximum number of trades to return
+
+        Returns:
+            List of trade dictionaries
+        """
+        async with self.connection() as conn:
+            if user_id:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, symbol, action, quantity, order_type, price,
+                           mode, status, order_id, timestamp::text
+                    FROM trades
+                    WHERE user_id = $1
+                    ORDER BY timestamp DESC
+                    LIMIT $2
+                    """,
+                    user_id,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, symbol, action, quantity, order_type, price,
+                           mode, status, order_id, timestamp::text
+                    FROM trades
+                    ORDER BY timestamp DESC
+                    LIMIT $1
+                    """,
+                    limit,
+                )
+
+            return [dict(row) for row in rows]
+
     async def health_check(self) -> dict[str, Any]:
         """
         Perform a health check on the PostgreSQL connection.

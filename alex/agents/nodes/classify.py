@@ -22,7 +22,7 @@ User message: {message}
 
 Respond with a JSON object containing:
 {{
-    "intent": "<one of: chat, question, code_change, refactor, debug, test, memory_query, task_planning, creative, self_modify>",
+    "intent": "<one of: chat, question, code_change, refactor, debug, test, memory_query, task_planning, creative, self_modify, trade>",
     "complexity_score": <float between 0.0 and 1.0, where 1.0 is highly complex>,
     "topics": [<list of main topics/concepts mentioned>],
     "entities": [<list of named entities like people, projects, files>],
@@ -31,6 +31,7 @@ Respond with a JSON object containing:
 }}
 
 Intent guidelines:
+- trade: User wants to view positions, place orders, close positions, check account balances, or interact with their brokerage account. Examples: "show my positions", "buy 100 AAPL", "close my TSLA position", "what's my account balance?", "sell 50 shares of NVDA"
 - self_modify: User gives a DIRECT COMMAND for Alex to modify its own code, add features to itself, or read its own files. Must be an action request, not a question. Examples: "add a /weather command to yourself", "read your main.py", "update your system prompt", "show me your code for X". NOT for questions like "can you modify yourself?" or "what can you do?"
 - question: User asks ABOUT Alex's capabilities, architecture, or how it works. Examples: "can you modify your code?", "what are your capabilities?", "how do you work?"
 - code_change: User asks about external code, not Alex's own codebase

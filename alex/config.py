@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     # Anthropic (Claude Code) Configuration
     anthropic_api_key: SecretStr | None = Field(default=None)
 
+    # TastyTrade Configuration
+    tasty_username: str | None = Field(default=None)
+    tasty_password: SecretStr | None = Field(default=None)
+    tasty_sandbox_username: str | None = Field(default=None)
+    tasty_sandbox_password: SecretStr | None = Field(default=None)
+    tasty_use_sandbox: bool = Field(default=True)  # Sandbox (paper trading) by default
+
     # Memory Configuration
     embedding_model: str = Field(default="text-embedding-004")
     embedding_dimensions: int = Field(default=768)  # Gemini text-embedding-004 uses 768 dims

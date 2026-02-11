@@ -16,7 +16,7 @@ logger = structlog.get_logger()
 
 def route_after_classify(
     state: AlexState,
-) -> Literal["retrieve_memory", "respond_flash", "respond_pro", "engineer", "self_modify", "error"]:
+) -> Literal["retrieve_memory", "respond_flash", "respond_pro", "engineer", "self_modify", "trade", "error"]:
     """
     Route after intent classification.
 
@@ -34,6 +34,11 @@ def route_after_classify(
     if metadata and metadata.intent == "self_modify":
         logger.info("Routing to self-modification node")
         return "self_modify"
+
+    # Check for trading intent
+    if metadata and metadata.intent == "trade":
+        logger.info("Routing to trade node")
+        return "trade"
 
     # Determine target cortex
     cortex = route_to_cortex(state)
